@@ -1,73 +1,181 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, Button } from 'react-native';
-import CurrencyInput from '../components/CurrencyInput';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  StyleSheet,
+  Button,
+  Text,
+  TouchableOpacity,
+  ActivityIndicator,
+  LayoutAnimation,
+  UIManager,
+  Platform,
+} from 'react-native';
+import ModalDropdown from '../components/ModalDropdown';
 import ResultDisplay from '../components/ResultDisplay';
-import axios from 'axios';
-
+import AsyncStorage from '@react-native-async-storage/async-storage';
 const HomeScreen = () => {
   const [amount, setAmount] = useState('');
   const [baseCurrency, setBaseCurrency] = useState('USD');
   const [targetCurrency, setTargetCurrency] = useState('EUR');
   const [convertedAmount, setConvertedAmount] = useState('');
-  const currencies = [
-    { label: 'USD', value: 'USD' },
-    { label: 'EUR', value: 'EUR' },
-    { label: 'GBP', value: 'GBP' },
-    { label: 'JPY', value: 'JPY' },
-    { label: 'INR', value: 'INR' },
-  ];
-const API_KEY='15baed3d1420cfe99bf65539'
-const handleConversion = async () => {
+  const [currencies, setCurrencies] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const fetchCurrencies = async () => {
     try {
-      const response = await fetch(
-        `https://api.exchangerate-api.com/v4/latest/${baseCurrency}`
-      ); 
-      if (!response.ok) throw new Error("Failed to fetch exchange rates");
+      const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+      if (!response.ok) throw new Error('Failed to fetch currencies');
+      const data = await response.json();
+      const currencyKeys = Object.keys(data.rates);
+      const formattedCurrencies = currencyKeys.map((currency) => ({
+        label: currency,
+        value: currency,
+      }));
+      setCurrencies(formattedCurrencies);
+    } catch (error) {
+      console.error('Error fetching currencies:', error.message);
+    }
+  };
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const savedAmount = await AsyncStorage.getItem('amount');
+        const savedBaseCurrency = await AsyncStorage.getItem('baseCurrency');
+        const savedTargetCurrency = await AsyncStorage.getItem('targetCurrency');
+
+        if (savedAmount) setAmount(savedAmount);
+        if (savedBaseCurrency) setBaseCurrency(savedBaseCurrency);
+        if (savedTargetCurrency) setTargetCurrency(savedTargetCurrency);
+      } catch (error) {
+        console.error('Error loading settings:', error);
+      }
+    };
+    loadSettings();
+  }, []);
+  useEffect(() => {
+    const saveSettings = async () => {
+      try {
+        await AsyncStorage.setItem('amount', amount);
+        await AsyncStorage.setItem('baseCurrency', baseCurrency);
+        await AsyncStorage.setItem('targetCurrency', targetCurrency);
+      } catch (error) {
+        console.error('Error saving settings:', error);
+      }
+    };
+    saveSettings();
+  }, [amount, baseCurrency, targetCurrency]);
+  useEffect(() => {
+    fetchCurrencies();
+    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+  }, []);
+const handleConversion = async () => {
+    if (!amount || isNaN(amount) || parseFloat(amount) <= 0) {
+      setError('Please enter a valid amount.');
+      return;
+    }
+    try {
+      setError('');
+      setLoading(true);
+      const response = await fetch(`https://api.exchangerate-api.com/v4/latest/${baseCurrency}`);
+      if (!response.ok) throw new Error('Failed to fetch exchange rates');
       const data = await response.json();
       const rate = data.rates[targetCurrency];
-      if (!rate) throw new Error("Currency not found in the API response");
+      if (!rate) throw new Error('Currency not found in the API response');
       const result = parseFloat(amount) * rate;
       setConvertedAmount(`${result.toFixed(2)} ${targetCurrency}`);
     } catch (error) {
-      console.error("Error fetching exchange rates:", error.message);
-      setConvertedAmount("Error fetching rates");
+      console.error('Error fetching exchange rates:', error.message);
+      setError('Conversion failed. Please try again later.');
+      setConvertedAmount('');
+    } finally {
+      setLoading(false);
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     }
   };
-  
-  
-  
-  return (
+   return (
     <View style={styles.container}>
-      {/* Currency Input for Amount and Base Currency */}
-      <CurrencyInput
-        value={amount}
-        onChangeText={(text) => setAmount(text)} // Update amount state
-        selectedCurrency={baseCurrency}
-        onSelectCurrency={(currency) => setBaseCurrency(currency)} // Update base currency
-        currencies={currencies}
+      <Text style={styles.header}>Currency Converter</Text>
+      <Text style={styles.label}>Enter Amount:</Text>
+      <TouchableOpacity style={styles.input}>
+        <Text>{amount || 'Type Amount'}</Text>
+      </TouchableOpacity>
+      <ModalDropdown
+        selectedValue={baseCurrency}
+        onSelectValue={(value) => setBaseCurrency(value)}
+        options={currencies}
+        placeholder="Select Base Currency"
       />
-      {/* Dropdown for Target Currency */}
-      <CurrencyInput
-        value={null} // No text input for target currency
-        onChangeText={() => {}} // No action for text input
-        selectedCurrency={targetCurrency}
-        onSelectCurrency={(currency) => setTargetCurrency(currency)} // Update target currency
-        currencies={currencies}
-        isTargetCurrency // Optional flag to customize rendering
+      <TouchableOpacity
+        style={styles.swapButton}
+        onPress={() => {
+          const temp = baseCurrency;
+          setBaseCurrency(targetCurrency);
+          setTargetCurrency(temp);
+        }}
+      >
+        <Text style={styles.swapText}>Swap</Text>
+      </TouchableOpacity>
+      <ModalDropdown
+        selectedValue={targetCurrency}
+        onSelectValue={(value) => setTargetCurrency(value)}
+        options={currencies}
+        placeholder="Select Target Currency"
       />
-      {/* Button to Trigger Conversion */}
+      {loading && <ActivityIndicator size="large" color="#007BFF" style={{ marginVertical: 20 }} />}
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
       <Button title="Convert" onPress={handleConversion} />
-      {/* Display the Conversion Result */}
       <ResultDisplay result={convertedAmount || 'No conversion yet'} />
     </View>
   );
 };
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
     justifyContent: 'center',
+  },
+  header: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#333',
+  },
+  label: {
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 10,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    padding: 10,
+    marginBottom: 10,
+    borderRadius: 5,
+    fontSize: 16,
+    color: '#333',
+  },
+  swapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    backgroundColor: '#4CAF50',
+    marginVertical: 10,
+    borderRadius: 5,
+  },
+  swapText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  errorText: {
+    color: 'red',
+    fontSize: 14,
+    textAlign: 'center',
+    marginVertical: 10,
   },
 });
 

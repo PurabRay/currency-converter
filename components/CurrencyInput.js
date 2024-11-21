@@ -1,25 +1,32 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, TextInput, StyleSheet } from 'react-native';
-import RNPickerSelect from 'react-native-picker-select';
+import DropDownPicker from 'react-native-dropdown-picker';
 
-const CurrencyInput = ({ value, onChangeText, selectedCurrency, onSelectCurrency, currencies, isTargetCurrency }) => {
+const CurrencyInput = ({ value, onChangeText, selectedCurrency, onSelectCurrency, currencies }) => {
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
   return (
     <View style={styles.container}>
-      {!isTargetCurrency && (
-        <TextInput
-          style={styles.input}
-          keyboardType="numeric"
-          value={value}
-          onChangeText={onChangeText}
-          placeholder="Enter amount"
-        />
-      )}
-      <RNPickerSelect
-        onValueChange={onSelectCurrency}
-        items={currencies}
-        value={selectedCurrency}
-        placeholder={{ label: "Select Currency", value: null }} // Placeholder for the dropdown
+      <TextInput
+        style={styles.input}
+        keyboardType="numeric"
+        value={value}
+        onChangeText={onChangeText}
+        placeholder="Enter amount"
       />
+   <DropDownPicker
+  open={isDropdownOpen}
+  value={selectedCurrency}
+  items={currencies}
+  setOpen={setIsDropdownOpen}
+  setValue={onSelectCurrency}
+  setItems={() => {}}
+  containerStyle={{ zIndex: 1000 }}
+  style={{ zIndex: 1000 }}
+  dropDownContainerStyle={{ zIndex: 1000 }}
+/>
+
+
     </View>
   );
 };
@@ -34,6 +41,17 @@ const styles = StyleSheet.create({
     flex: 1,
     borderBottomWidth: 1,
     marginRight: 10,
+  },
+  dropdownContainer: {
+    flex: 1,
+  },
+  dropdown: {
+    borderWidth: 0.5,
+    borderColor: 'gray',
+    borderRadius: 5,
+  },
+  dropdownInner: {
+    backgroundColor: 'white',
   },
 });
 
